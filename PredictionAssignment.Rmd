@@ -11,19 +11,55 @@ library(knitr)
 
 ```
 
-## R Markdown
+## Executive Summary
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+Lorem ipsunt ...
 
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+## Data import
 
 ```{r cars}
-summary(cars)
+
 ```
 
-## Including Plots
+Final goal is to predict the manner in which the exercise was done in the test data set. 
 
-You can also embed plots, for example:
+
+
+
+## Exploration
+
+An analysis of the test data shows that some variables are missing completely. It may not be sensible to construct a prediction model that relies on data not present when finally testing the model. This reasoning provides a first selection criterion to reduce the variables in the training data set. 
+
+Result is tibble predictors ... 
+
+
+The training data contains information on six different users with at least 2,600 observations. 
+The number of observations in each class of execution (classe) is large, with a minimum of almost 500 obervation per bucket.
+
+This might allow to build a separate model for each user and average them to end up with the average 
+
+```{r users}
+
+table(pml_training$user_name)
+table(pml_training$user_name, pml_training$classe)
+
+```
+
+
+
+## Cross validation
+
+As there is a independent test data, there is no need to set aside observations for final testing. However, it seems prudent to create a validation set to enable some estimation of expected prediction error.
+
+One might also consider 
+
+## Model building
+
+Type of final model: Classification - has the exercise been performed as specified or what type of mistake has been made.
+
+
+
 
 ```{r pressure, echo=FALSE}
 plot(pressure)
