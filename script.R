@@ -1,8 +1,6 @@
 library(tidyverse)
 library(readr)
 library(tidymodels)
-library(workflows)
-library(tune)
 library(ranger)
 library(parallel)
 library(doParallel)
@@ -25,7 +23,7 @@ prednames <- colnames(predictors)
 
 # reduce training set to variables actually available in test set
 # predname[60] is problem_id (copy of X1)
-# predname[1:7] - descriptive variables, unsuited for model
+# predname[1:7] - descriptive variables, unsuited for forecasting
 # add back the independent variable
 train <- pml_training %>% 
         select(prednames[-60]) %>% 
@@ -46,7 +44,7 @@ pml_recipe <-
 
 # spec the model to be random forest, tune mtry, ranger
 pml_model <- rand_forest() %>%
-        set_args(mtry = tune()) %>%
+        set_args(mtry = tune(), trees = tune()) %>%
         set_engine("ranger", importance = "impurity") %>%
         set_mode("classification")
 
@@ -57,12 +55,12 @@ pml_workflow <- workflow() %>%
 
 
 # tune mtry parameter
-pml_grid <- expand.grid(mtry = c(7, 8, 9))
+pml_grid <- expand.grid(mtry = c(3,4,5), trees = c(2, 5, 10))
 pml_tune_results <- pml_workflow %>%
         tune_grid(
                 resamples = train_cv,
                 grid = pml_grid,
-                metrics = metric_set(accuracy, roc_auc)
+                metrics = metric_set(accuracy, sens, spec)
         )
 
 # set mtry parameter in final workflow
@@ -86,8 +84,7 @@ validat_pred <- pml_fit %>%
 validat_pred %>%
         conf_mat(truth = classe, estimate = .pred_class)
 
-
-
+ res <- pml_tune_results %>% collect_metrics()
 # fitting final model
 
 # predict test data
