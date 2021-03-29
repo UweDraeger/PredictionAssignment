@@ -9,33 +9,60 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 library(knitr)
 
+library(tidyverse)
+library(readr)
+library(tidymodels)
+library(ranger)
+
+library(parallel)
+library(doParallel)
+
 ```
 
 ## Executive Summary
 
-Lorem ipsunt ...
-
+tidymodels rather than caret
+random forest to classify
 
 ## Data import
 
-```{r cars}
+```{r enable_parallel}
+
+cluster <- makeCluster(detectCores() - 1) 
+registerDoParallel(cluster)
 
 ```
 
-Final goal is to predict the manner in which the exercise was done in the test data set. 
 
+```{r import_data}
+
+# read the data files, set missing data and errors to NA
+pml_training <-
+        as_tibble(read_csv("pml-training.csv", na = c("#DIV/0!", "NA"))) %>%
+        mutate_if(is.character, as.factor)
+
+# to avoid confusion, the "testing" set is called newdata 
+pml_newdata <-
+        as_tibble(read_csv("pml-testing.csv", na = c("#DIV/0!", "NA"))) %>%
+        mutate_if(is.character, as.factor)
+
+```
 
 
 
 ## Exploration
 
-An analysis of the out-of-sample data shows that quite a few variables consist of missing values only. It may not be sensible to even start to construct a prediction model which might finally rely on indicators which are not available when finally performing the predictions. This reasoning creates a first exclusion criterion for variables in the training data set. 
+An analysis of the out-of-sample data (pml-testing) shows that quite a few variables consist of missing values only. It may not be sensible to even start constructing a prediction model, if in the end it potentially relies on indicators which are not available when applying the model. This reasoning creates a first exclusion criterion for variables in the training data set. 
 
-The result is a list of 59 variables available as predictors. Some of the them serve as descriptors and can reasonably be expected to have no influence on the outcome. Those will be excluded from the model building process as well. 52 variables survive. 
+The result is a list of 59 variables available as predictors. 
 
 
-The training data contains information on six different users with at least 2,600 observations. 
-The number of observations in each class of execution (classe) is large, with a minimum of almost 500 obervation per bucket, and relatively easily split.
+The training data contains additional variables to identify the observations and can be expected to have no influence on the outcome, like row numbers or timestamps. Those will be excluded from the model building process as well. 
+An interesting question is whether the user identifier should be included as a predictor. There may be individual differenes in the execution that are typical for user A but not for B, C, etc. If the goal is to predict the users only then it should be helpful to predict a different model for each user - the fact that the out-of-sample data contains identical user names is tempting...
+However, since the real goal is likely to predict for a typical user, the user name is excluded from the set of predictors.
+
+52 variables survive with information on six different users with at least 2,600 observations each. 
+The number of observations per user in each class of execution (classe - the independent variable) is also large, with a minimum of almost 500 observation per bucket, and relatively evenly split.
 
 ```{r users}
 
@@ -46,12 +73,11 @@ table(pml_training$user_name, pml_training$classe)
 ```
 
 
-
 ## Cross validation
 
-As there is an independent test data, there is no need to set aside observations for final testing. However, it seems prudent to create a validation set to enable some estimation of expected prediction error. 
+Although there is a set of new data for the prediction, it seems prudent to create a validation set to enable some estimation of model quality and expected prediction error. 
 
-One might also consider 
+
 
 ## Model building
 
