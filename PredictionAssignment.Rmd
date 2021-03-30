@@ -6,7 +6,7 @@ output: html_document
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = FALSE)
 library(knitr)
 
 library(tidyverse)
@@ -38,13 +38,14 @@ registerDoParallel(cluster)
 
 # read the data files, set missing data and errors to NA
 pml_training <-
-        as_tibble(read_csv("pml-training.csv", na = c("#DIV/0!", "NA"))) %>%
-        mutate_if(is.character, as.factor)
+  as_tibble(read_csv("pml-training.csv", na = c("#DIV/0!", "NA"))) %>%
+  mutate_if(is.character, as.factor)
 
 # to avoid confusion, the "testing" set is called newdata 
 pml_newdata <-
-        as_tibble(read_csv("pml-testing.csv", na = c("#DIV/0!", "NA"))) %>%
-        mutate_if(is.character, as.factor)
+  as_tibble(read_csv("pml-testing.csv", na = c("#DIV/0!", "NA"))) %>%
+  mutate_if(is.character, as.factor)
+
 
 ```
 
@@ -57,15 +58,30 @@ An analysis of the out-of-sample data (pml-testing) shows that quite a few varia
 The result is a list of 59 variables available as predictors. 
 
 
-The training data contains additional variables to identify the observations and can be expected to have no influence on the outcome, like row numbers or timestamps. Those will be excluded from the model building process as well. 
-An interesting question is whether the user identifier should be included as a predictor. There may be individual differenes in the execution that are typical for user A but not for B, C, etc. If the goal is to predict the users only then it should be helpful to predict a different model for each user - the fact that the out-of-sample data contains identical user names is tempting...
+The training data contains additional variables to identify the observations and thus can be expected to have no influence on the outcome, like row numbers or timestamps. Those will be excluded from the model building process as well. 
+An interesting question is whether the user identifier should be included as a predictor. There may be individual differences in the execution that are typical for user A but not for B, C, etc. If the goal is to predict for the given users only then it should be helpful to have a different model for each user - the fact that the out-of-sample data contains identical user names is tempting...
 However, since the real goal is likely to predict for a typical user, the user name is excluded from the set of predictors.
 
 52 variables survive with information on six different users with at least 2,600 observations each. 
 The number of observations per user in each class of execution (classe - the independent variable) is also large, with a minimum of almost 500 observation per bucket, and relatively evenly split.
 
-```{r users}
+```{r exploration}
 
+# find all variables with usable data in testing (i.e. remove all cols with NA only)
+vars_with_data <- pml_newdata %>% 
+  select(which(colMeans(is.na(.)) == 0))
+prednames <- colnames(vars_with_data)
+
+# reduce training set to variables actually available in test set
+# predname[60] is problem_id (copy of X1) -> remove
+# predname[1:7] - descriptive variables -> exclude from prediction
+# add back the independent variable 
+train <- pml_training %>% 
+  select(prednames[-60]) %>% 
+  select(-(X1:num_window)) %>%
+  mutate(classe = pml_training$classe)
+
+# table results
 table(pml_training$classe)
 table(pml_training$user_name)
 table(pml_training$user_name, pml_training$classe)
@@ -75,13 +91,90 @@ table(pml_training$user_name, pml_training$classe)
 
 ## Cross validation
 
-Although there is a set of new data for the prediction, it seems prudent to create a validation set to enable some estimation of model quality and expected prediction error. 
+Data is split into a training and a test set using a ratio of 3 to 1. 
+This will be used when tuning the model.
 
+```{r cross_validation}
 
+# set seed as there is randomness in assigning cases to train or test
+set.seed(12345)
+
+# split train and test, create cross validation object 
+train_split <- initial_split(train, prop = 0.75)
+
+pml_train <- training(train_split)
+pml_test <- testing(train_split)
+
+train_cv <- vfold_cv(train)
+
+```
 
 ## Model building
 
-Type of final model: Classification - has the exercise been performed as specified or what type of mistake has been made.
+### Define a recipe
+
+
+```{r recipe}
+
+# set up formula and 
+# preprocessing: normalize numeric data 
+pml_recipe <-
+  recipe(classe ~ ., data = pml_train) %>%
+  step_normalize(all_numeric()) 
+
+```
+
+
+### Specify the model
+
+Type of final model: Classification - has the weight-lifting exercise been performed as specified or what type of mistake has been made.
+
+```{r model}
+
+# spec the model to be random forest 
+# set arguments mtry and trees for tuning 
+# use ranger implementation of random forest to classify
+pml_model <- rand_forest() %>%
+  set_args(mtry = tune(), trees = tune()) %>%
+  set_engine("ranger") %>%
+  set_mode("classification")
+
+```
+
+
+### Build the workflow
+
+```{r workflow}
+
+# build the workflow by combining recipe and model
+pml_workflow <- workflow() %>%
+  add_recipe(pml_recipe) %>%
+  add_model(pml_model)
+
+```
+
+
+### Parameter tuning
+
+```{r tuning}
+
+# tune mtry and trees parameters
+pml_grid <- expand.grid(mtry = c(6, 7, 8), trees = c(50, 100, 200))
+pml_tune_results <- pml_workflow %>%
+  tune_grid(
+    resamples = train_cv,
+    grid = pml_grid,metrics = metric_set(accuracy, sens, spec)
+    )
+
+results <- pml_tune_results %>% collect_metrics()
+results
+
+tuning_result <- pml_tune_results %>%
+  select_best(metric = "accuracy")
+
+```
+
+The usual recommendation for mtry is sqrt(number of predictors) which would be 7 in this case.
 
 Tuning was performed using mtry = c(6,7,8) trees = c(100, 200, 500) - almost no differences in accuracy, sens or spec = use mtry = 6 and trees = 100
 
@@ -98,8 +191,32 @@ Tuning was performed using mtry = c(6,7,8) trees = c(100, 200, 500) - almost no 
 3     5    10 spec     macro      0.998    10 0.000271 Preprocessor1_Model9
  
 
-```{r pressure, echo=FALSE}
-plot(pressure)
+### Add best parameters to workflow
+
+```{r finalize}
+
+# set parameters in final workflow
+pml_workflow <- pml_workflow %>%
+  finalize_workflow(tuning_result)
+
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+### Apply model to test
+
+```{r apply_to_test}
+
+# evaluate model on validation set
+pml_fit <- pml_workflow %>%
+  last_fit(train_split)
+
+train_perf <- pml_fit %>%
+  collect_metrics()
+
+validat_pred <- pml_fit %>%
+  collect_predictions()
+
+validat_pred %>%
+  conf_mat(truth = classe, estimate = .pred_class)
+
+```
+

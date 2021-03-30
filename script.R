@@ -69,18 +69,19 @@ pml_tune_results <- pml_workflow %>%
                 grid = pml_grid,
                 metrics = metric_set(accuracy, sens, spec)
         )
-results <- pml_tune_results %>% collect_metrics()
+results <- pml_tune_results %>% 
+        collect_metrics()
  
 # set parameters in final workflow
 # choice of accuracy 
 tuning_result <- pml_tune_results %>%
         select_best(metric = "accuracy")
 
-pml_final_workflow <- pml_workflow %>%
+pml_workflow <- pml_workflow %>%
         finalize_workflow(tuning_result)
         
 # evaluate model on validation set
-pml_fit <- pml_final_workflow %>%
+pml_fit <- pml_workflow %>%
         last_fit(train_split)
 
 train_perf <- pml_fit %>%
@@ -94,11 +95,11 @@ validat_pred %>%
 
 
 # fitting final model
-class(pml_fit)
-pml_final <- fit(pml_fit, pml_training)
+pml_final <- fit(pml_workflow, pml_training)
 
 # predict test data
 
 predict(pml_final, new_data = pml_newdata)
+
 stopCluster(cluster)
 registerDoSEQ()
