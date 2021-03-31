@@ -6,7 +6,7 @@ output: html_document
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = FALSE)
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
 library(knitr)
 
 library(tidyverse)
@@ -21,8 +21,7 @@ library(doParallel)
 
 ## Executive Summary
 
-tidymodels rather than caret
-random forest to classify
+tidymodels rather than caret random forest to classify
 
 ## Data import
 
@@ -32,7 +31,6 @@ cluster <- makeCluster(detectCores() - 1)
 registerDoParallel(cluster)
 
 ```
-
 
 ```{r import_data}
 
@@ -46,24 +44,50 @@ pml_newdata <-
   as_tibble(read_csv("pml-testing.csv", na = c("#DIV/0!", "NA"))) %>%
   mutate_if(is.character, as.factor)
 
-
 ```
 
+Two data files are imported and converted to tibbles.
 
+\* pml-training.csv: 19,622 observations of 160 variables\
+\* pml-testing.csv: 20 observations of 160 variables
+
+During the import values of "\#DIV/0!" and "NA" to NA. Categorical variables are
+converted to factors.\
+To avoid confusion when cross-validating (where "training" and "testing" are
+common terminology) pml-testing is renamed to pml-newdata.
 
 ## Exploration
 
-An analysis of the out-of-sample data (pml-testing) shows that quite a few variables consist of missing values only. It may not be sensible to even start constructing a prediction model, if in the end it potentially relies on indicators which are not available when applying the model. This reasoning creates a first exclusion criterion for variables in the training data set. 
+A comparison of variable names in the two datasets shows that there is a
+difference. Training data contains the independent variable "classe" whereas
+newdata does have a variable called "problem_id" which is identical to the row
+number. Consequently, pml-newdata has no outcome variable and the true
+out-of-sample predictive ability of the model remains an open question.
 
-The result is a list of 59 variables available as predictors. 
+A further analysis of pml-newdata shows that many variables consist of missing
+values only. It may not be sensible to even start constructing a prediction
+model, if in the end it potentially relies on indicators which are not available
+when applying the model. This reasoning creates a first exclusion criterion for
+variables in the training data set.
 
+The result is a list of 59 variables available as predictors.
 
-The training data contains additional variables to identify the observations and thus can be expected to have no influence on the outcome, like row numbers or timestamps. Those will be excluded from the model building process as well. 
-An interesting question is whether the user identifier should be included as a predictor. There may be individual differences in the execution that are typical for user A but not for B, C, etc. If the goal is to predict for the given users only then it should be helpful to have a different model for each user - the fact that the out-of-sample data contains identical user names is tempting...
-However, since the real goal is likely to predict for a typical user, the user name is excluded from the set of predictors.
+The training data contains additional variables to identify the observations and
+thus can be expected to have no influence on the outcome, like row numbers or
+timestamps. Those will be excluded from the model building process as well. An
+interesting question is whether the user identifier should be included as a
+predictor. There may be individual differences in the execution that are typical
+for user A but not for B, C, etc. If the goal is to predict for the given users
+only then it should be helpful to include the user name as a predictor, i.e.
+have a different model for each user - the fact that the out-of-sample data
+contains identical user names is tempting... However, since the real goal is
+likely to predict for a typical user, the user name is excluded from the set of
+predictors in this analysis.
 
-52 variables survive with information on six different users with at least 2,600 observations each. 
-The number of observations per user in each class of execution (classe - the independent variable) is also large, with a minimum of almost 500 observation per bucket, and relatively evenly split.
+52 variables survive with information on six different users with at least 2,600
+observations each. The number of observations per user in each class of
+execution (classe - the independent variable) is also large, with a minimum of
+almost 500 observation per bucket, and relatively evenly split.
 
 ```{r exploration}
 
@@ -82,17 +106,16 @@ train <- pml_training %>%
   mutate(classe = pml_training$classe)
 
 # table results
-table(pml_training$classe)
-table(pml_training$user_name)
-table(pml_training$user_name, pml_training$classe)
+kable(table(pml_training$classe))
+kable(table(pml_training$user_name))
+kable(table(pml_training$user_name, pml_training$classe))
 
 ```
 
-
 ## Cross validation
 
-Data is split into a training and a test set using a ratio of 3 to 1. 
-This will be used when tuning the model.
+Data is split into a training and a test set using a ratio of 3 to 1. This will
+be used when tuning the model.
 
 ```{r cross_validation}
 
@@ -113,7 +136,6 @@ train_cv <- vfold_cv(train)
 
 ### Define a recipe
 
-
 ```{r recipe}
 
 # set up formula and 
@@ -124,10 +146,10 @@ pml_recipe <-
 
 ```
 
-
 ### Specify the model
 
-Type of final model: Classification - has the weight-lifting exercise been performed as specified or what type of mistake has been made.
+Type of final model: Classification - has the weight-lifting exercise been
+performed as specified or what type of mistake has been made.
 
 ```{r model}
 
@@ -141,7 +163,6 @@ pml_model <- rand_forest() %>%
 
 ```
 
-
 ### Build the workflow
 
 ```{r workflow}
@@ -152,7 +173,6 @@ pml_workflow <- workflow() %>%
   add_model(pml_model)
 
 ```
-
 
 ### Parameter tuning
 
@@ -174,22 +194,24 @@ tuning_result <- pml_tune_results %>%
 
 ```
 
-The usual recommendation for mtry is sqrt(number of predictors) which would be 7 in this case.
+The usual recommendation for mtry is sqrt(number of predictors) which would be 7
+in this case.
 
-Tuning was performed using mtry = c(6,7,8) trees = c(50, 100, 200) - almost no differences in accuracy, sens or spec = use mtry = 6 and trees = 100
+Tuning was performed using mtry = c(6,7,8) trees = c(50, 100, 200) - almost no
+differences in accuracy, sens or spec = use mtry = 6 and trees = 100
 
         mtry trees .metric  .estimator  mean     n  std_err .config             
         <dbl> <dbl> <chr>    <chr>      <dbl> <int>    <dbl> <chr>               
- 1     6   100 accuracy multiclass 0.996    10 0.000479 Preprocessor1_Model1
- 2     6   100 sens     macro      0.995    10 0.000565 Preprocessor1_Model1
- 3     6   100 spec     macro      0.999    10 0.000124 Preprocessor1_Model1
- 
-   mtry trees .metric  .estimator  mean     n  std_err .config             
-  <dbl> <dbl> <chr>    <chr>      <dbl> <int>    <dbl> <chr>               
-1     5    10 accuracy multiclass 0.991    10 0.00106  Preprocessor1_Model9
-2     5    10 sens     macro      0.990    10 0.00121  Preprocessor1_Model9
-3     5    10 spec     macro      0.998    10 0.000271 Preprocessor1_Model9
- 
+
+1 6 100 accuracy multiclass 0.996 10 0.000479 Preprocessor1_Model1 2 6 100 sens
+macro 0.995 10 0.000565 Preprocessor1_Model1 3 6 100 spec macro 0.999 10
+0.000124 Preprocessor1_Model1
+
+mtry trees .metric .estimator mean n std_err .config\
+<dbl> <dbl> <chr> <chr> <dbl> <int> <dbl> <chr>\
+1 5 10 accuracy multiclass 0.991 10 0.00106 Preprocessor1_Model9 2 5 10 sens
+macro 0.990 10 0.00121 Preprocessor1_Model9 3 5 10 spec macro 0.998 10 0.000271
+Preprocessor1_Model9
 
 ### Add best parameters to workflow
 
@@ -219,4 +241,3 @@ validat_pred %>%
   conf_mat(truth = classe, estimate = .pred_class)
 
 ```
-
