@@ -76,8 +76,12 @@ accuracies <- results %>%
         filter(.metric == "accuracy") %>% 
         select(mtry, trees, mean, std_err) %>% 
         arrange(mtry, trees)
-ggplot(data = accuracies) +
-        geom_point(aes(x = mtry, y = mean, color = trees)) 
+ggplot(data = accuracies, aes(x = mtry, y = mean, color = as_factor(trees))) +
+        geom_point(position = position_jitter(width = .05, height = 0.005)) +
+        labs(title = "Jittered plot of accuracies", 
+             caption = "mtry parameter") + 
+        ylim(0.75, 1) + 
+        scale_x_continuous(breaks = c(2,5,7))
 
  
 # set parameters in final workflow

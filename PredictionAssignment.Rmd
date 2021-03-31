@@ -229,35 +229,72 @@ pml_grid <- expand.grid(mtry = c(2, 5, 7), trees = c(50, 100, 500))
 pml_tune_results <- pml_workflow %>%
   tune_grid(
     resamples = train_cv,
-    grid = pml_grid,metrics = metric_set(accuracy, sens, spec)
+    grid = pml_grid,
+    metrics = metric_set(accuracy, sens, spec)
     )
 
-results <- pml_tune_results %>% collect_metrics()
-results
+results <- pml_tune_results %>% 
+        collect_metrics()
 
-tuning_result <- pml_tune_results %>%
-  select_best(metric = "accuracy")
+# next (commented) lines of code would use best parameter set, getting the process # closer to unsupervised learning
 
+# tuning_result <- pml_tune_results %>% select_best(metric = "accuracy")
+# pml_workflow <- pml_workflow %>% finalize_workflow(tuning_result)
 ```
 
 Tuning was performed using mtry = c(2, 5, 7) and trees = c(50, 100, 500).
 
-The general expectation would be that the inclusion of more predictors and the
-creation of more trees increases in-sample accuracy. However, even with a set of
-the smallest parameters (mtry = 2 and trees = 50) the accuracy was above 99%,
-equally high were sensitivity and specificity. The increase in acd mean, str_err
+The ad-hoc expectation was that the inclusion of more predictors and the
+creation of more trees increases in-sample accuracy. However, even with the
+smallest parameters (i.e. mtry = 2 and trees = 50) the accuracy was above 99%,
+equally high were sensitivity and specificity. Any increase in the parameters
+will, on the other hand, increase the amount of potential over-fitting.
 
-### Add best parameters to workflow
+```{r tuning_result}
+
+# create tibble with accuracy data
+accuracies <- results %>% 
+        filter(.metric == "accuracy") %>% 
+        select(mtry, trees, mean, std_err) %>% 
+        arrange(mtry, trees)
+accuracies
+
+# make a plot
+ggplot(data = accuracies, aes(x = mtry, y = mean, color = as_factor(trees))) +
+        geom_point(position = position_jitter(width = .05, height = 0.005)) +
+        labs(title = "Jittered plot of accuracies", 
+             caption = "mtry parameter") + 
+        ylim(0.75, 1) + 
+        scale_x_continuous(breaks = c(2,5,7))
+
+```
+
+The plot makes it obvious that there is hardly any difference in the accuracies
+achieved. \
+The final model will be run with mtry = 7 (as this is close to the rule of
+thumb) and trees = 100 (as a compromise between speed of computation and
+precision).
+
+### Add selected parameters to workflow
 
 ```{r finalize}
 
-# set parameters in final workflow
-pml_workflow <- pml_workflow %>%
-  finalize_workflow(tuning_result)
+# set selected parameter values in final model
+pml_final_model <- rand_forest() %>%
+  set_args(mtry = 7, trees = 100) %>%
+  set_engine("ranger") %>%
+  set_mode("classification")
+
+#combine recipe with final model 
+pml_workflow <- workflow() %>%
+  add_recipe(pml_recipe) %>%
+  add_model(pml_final_model)
 
 ```
 
 ### Apply model to test
+
+In a last step the model will be applied to the test set (pml_test).
 
 ```{r apply_to_test}
 
@@ -265,9 +302,12 @@ pml_workflow <- pml_workflow %>%
 pml_fit <- pml_workflow %>%
   last_fit(train_split)
 
+# calculate metrics (interested in accuracy)
 train_perf <- pml_fit %>%
   collect_metrics()
+kable(train_perf)
 
+# predict classe in training set
 validat_pred <- pml_fit %>%
   collect_predictions()
 
@@ -275,3 +315,9 @@ validat_pred %>%
   conf_mat(truth = classe, estimate = .pred_class)
 
 ```
+
+The result (99.51%) confirms the high accuracy in the training set (99.55%).
+
+Given the fact that training and testing set were generated from the same
+individuals, there is a fair chance for a significant drop in accuracy when
+other individuals are measured.
