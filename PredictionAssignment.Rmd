@@ -10,7 +10,6 @@ knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
 library(knitr)
 
 library(tidyverse)
-library(readr)
 library(tidymodels)
 library(ranger)
 
@@ -57,6 +56,9 @@ To avoid confusion when cross-validating (where "training" and "testing" are
 common terminology) pml-testing is renamed to pml-newdata.
 
 ## Exploration
+
+The outcome variable "classe" is categorical and thus a classification should be
+predicted.
 
 A comparison of variable names in the two datasets shows that there is a
 difference. Training data contains the independent variable "classe" whereas
@@ -114,8 +116,10 @@ kable(table(pml_training$user_name, pml_training$classe))
 
 ## Cross validation
 
-Data is split into a training and a test set using a ratio of 3 to 1. This will
-be used when tuning the model.
+The initial dataset (pml_testing) is split into a training and a test set using
+a ratio of 3 to 1. The training set will be used to build and tuning the model.
+The test set then allows to assess the forecasting ability on data that has not
+been used to build and tune.
 
 ```{r cross_validation}
 
@@ -128,6 +132,7 @@ train_split <- initial_split(train, prop = 0.75)
 pml_train <- training(train_split)
 pml_test <- testing(train_split)
 
+# create cross validation object to be used later in tuning
 train_cv <- vfold_cv(train)
 
 ```
@@ -135,6 +140,17 @@ train_cv <- vfold_cv(train)
 ## Model building
 
 ### Define a recipe
+
+The tidymodels package allows to define a "recipe". Such recipes start with
+basic information about the model by defining the data and the roles of
+variables as outcomes, predictors, or not-to-be-used descriptors. The recipe
+also provides preprocessing steps to transform the variables.
+
+Given that all predictors are numerical but on different scales we only
+normalize (center plus scale) them to bring the values to a comparable scale.
+
+The recipe will automatically be applied to the test data when validating the
+model.
 
 ```{r recipe}
 
@@ -151,6 +167,27 @@ pml_recipe <-
 Type of final model: Classification - has the weight-lifting exercise been
 performed as specified or what type of mistake has been made.
 
+The model used is of the "random forest" type. Such models tend to exhibit high
+accuracy, especially in situation with many more observations then predictors.
+Internally, random samples of the observations are taken via bootstrapping.
+Additionally also the variables are randomly sampled via bootstrapping. Many
+trees are build and a voting algorithm is applied to define the optimal decision
+tree.\
+Disadvantages of random forest models are their high requirements of computing
+power / slow speed, some lack of in-depth interpretability, and a tendency to
+overfit. A careful assessment in an out-of-sample context is recommended.
+
+There are three "hyperparameters" than can be used to tune the model.
+
+1.  Number of predictors (mtry)
+2.  Number of trees (trees)
+3.  Minimum number of data points in a node required to split further (min_n).\
+    This parameter is not used in tuning the model, i.e. left at the default
+    value of 1.
+
+The model will be tuned by simulating in-sample performance for a range of mtry
+and trees parameters.
+
 ```{r model}
 
 # spec the model to be random forest 
@@ -165,6 +202,8 @@ pml_model <- rand_forest() %>%
 
 ### Build the workflow
 
+A workflow combines a recipe with a model. Nothing is computed yet.
+
 ```{r workflow}
 
 # build the workflow by combining recipe and model
@@ -176,10 +215,17 @@ pml_workflow <- workflow() %>%
 
 ### Parameter tuning
 
+As outlined above, changes to mtry and trees parameters are to be changed and
+the quality of the resulting predictions are evaluated in-sample on the train
+set.
+
+The usual recommendation for mtry is sqrt(number of predictors) which would be
+roughly 7 in the case of 52 predictors. The default value for trees is 500.
+
 ```{r tuning}
 
 # tune mtry and trees parameters
-pml_grid <- expand.grid(mtry = c(2:10), trees = c(50))
+pml_grid <- expand.grid(mtry = c(2, 5, 7), trees = c(50, 100, 500))
 pml_tune_results <- pml_workflow %>%
   tune_grid(
     resamples = train_cv,
@@ -194,24 +240,12 @@ tuning_result <- pml_tune_results %>%
 
 ```
 
-The usual recommendation for mtry is sqrt(number of predictors) which would be 7
-in this case.
+Tuning was performed using mtry = c(2, 5, 7) and trees = c(50, 100, 500).
 
-Tuning was performed using mtry = c(6,7,8) trees = c(50, 100, 200) - almost no
-differences in accuracy, sens or spec = use mtry = 6 and trees = 100
-
-        mtry trees .metric  .estimator  mean     n  std_err .config             
-        <dbl> <dbl> <chr>    <chr>      <dbl> <int>    <dbl> <chr>               
-
-1 6 100 accuracy multiclass 0.996 10 0.000479 Preprocessor1_Model1 2 6 100 sens
-macro 0.995 10 0.000565 Preprocessor1_Model1 3 6 100 spec macro 0.999 10
-0.000124 Preprocessor1_Model1
-
-mtry trees .metric .estimator mean n std_err .config\
-<dbl> <dbl> <chr> <chr> <dbl> <int> <dbl> <chr>\
-1 5 10 accuracy multiclass 0.991 10 0.00106 Preprocessor1_Model9 2 5 10 sens
-macro 0.990 10 0.00121 Preprocessor1_Model9 3 5 10 spec macro 0.998 10 0.000271
-Preprocessor1_Model9
+The general expectation would be that the inclusion of more predictors and the
+creation of more trees increases in-sample accuracy. However, even with a set of
+the smallest parameters (mtry = 2 and trees = 50) the accuracy was above 99%,
+equally high were sensitivity and specificity. The increase in acd mean, str_err
 
 ### Add best parameters to workflow
 

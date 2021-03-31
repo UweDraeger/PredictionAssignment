@@ -71,6 +71,14 @@ pml_tune_results <- pml_workflow %>%
         )
 results <- pml_tune_results %>% 
         collect_metrics()
+
+accuracies <- results %>% 
+        filter(.metric == "accuracy") %>% 
+        select(mtry, trees, mean, std_err) %>% 
+        arrange(mtry, trees)
+ggplot(data = accuracies) +
+        geom_point(aes(x = mtry, y = mean, color = trees)) 
+
  
 # set parameters in final workflow
 # choice of accuracy 
