@@ -173,24 +173,26 @@ pre code {
 
 <div id="executive-summary" class="section level2">
 <h2>Executive Summary</h2>
-<p>tidymodels rather than caret random forest to classify</p>
+<p>Goal of the project was to create a model based to predict correct execution or common mistakes of barbell-lifting exercises based on measurements from fitness trackers. A random forest model was created based on the tidymodels package in R. The model performs well with a likelihood of correct prediction above 99%.<br />
+Consequently, fitness trackers or smartwatches can indeed be used to alert their users about incorrect execution of certain exercises.</p>
 </div>
 <div id="data-import" class="section level2">
 <h2>Data import</h2>
+<p>Data for this project come from this source: <a href="http://groupware.les.inf.puc-rio.br/har" class="uri">http://groupware.les.inf.puc-rio.br/har</a>.</p>
 <p>Two data files are imported and converted to tibbles.</p>
 <p>* pml-training.csv: 19,622 observations of 160 variables<br />
 * pml-testing.csv: 20 observations of 160 variables</p>
-<p>During the import values of “#DIV/0!” and “NA” to NA. Categorical variables are converted to factors.<br />
-To avoid confusion when cross-validating (where “training” and “testing” are common terminology) pml-testing is renamed to pml-newdata.</p>
+<p>During the import values of “#DIV/0!” and “NA” are set to NA. Categorical variables are converted to factors.<br />
+To avoid confusion when cross-validating (where “training” and “testing” are common terminology) the pml-testing data is named pml_newdata.</p>
 </div>
 <div id="exploration" class="section level2">
 <h2>Exploration</h2>
 <p>The outcome variable “classe” is categorical and thus a classification should be predicted.</p>
-<p>A comparison of variable names in the two datasets shows that there is a difference. Training data contains the independent variable “classe” whereas newdata does have a variable called “problem_id” which is identical to the row number. Consequently, pml-newdata has no outcome variable and the true out-of-sample predictive ability of the model remains an open question.</p>
-<p>A further analysis of pml-newdata shows that many variables consist of missing values only. It may not be sensible to even start constructing a prediction model, if in the end it potentially relies on indicators which are not available when applying the model. This reasoning creates a first exclusion criterion for variables in the training data set.</p>
-<p>The result is a list of 59 variables available as predictors.</p>
-<p>The training data contains additional variables to identify the observations and thus can be expected to have no influence on the outcome, like row numbers or timestamps. Those will be excluded from the model building process as well. An interesting question is whether the user identifier should be included as a predictor. There may be individual differences in the execution that are typical for user A but not for B, C, etc. If the goal is to predict for the given users only then it should be helpful to include the user name as a predictor, i.e. have a different model for each user - the fact that the out-of-sample data contains identical user names is tempting… However, since the real goal is likely to predict for a typical user, the user name is excluded from the set of predictors in this analysis.</p>
-<p>52 variables survive with information on six different users with at least 2,600 observations each. The number of observations per user in each class of execution (classe - the independent variable) is also large, with a minimum of almost 500 observation per bucket, and relatively evenly split.</p>
+<p>A comparison of variable names in the two datasets shows that there is a difference. Training data contains the independent variable “classe” whereas newdata has a variable called “problem_id” which is identical to the row number. Consequently, pml_newdata has no outcome variable and the true out-of-sample predictive ability of the model remains an open question.</p>
+<p>A further analysis of pml_newdata shows that many variables consist of missing values only. It may not be sensible to even start constructing a prediction model, if in the end it potentially relies on indicators which are not available when applying the model. This reasoning creates a first exclusion criterion for variables in the training data set.</p>
+<p>The result is a list of 59 variables available as potential predictors.</p>
+<p>The training data contains additional variables to identify the observations and thus can be expected to have no influence on the outcome, like row numbers or timestamps. Those will be excluded from the model building process as well. An interesting question is whether the user identifier should be included as a predictor. There may be individual differences in the execution that are typical for user A but not for B, C, etc. If the goal is to predict for the given users only then it should be helpful to include the user name as a predictor, i.e. have a different model for each user - the fact that the out-of-sample data contains identical user names is tempting… However, since the real goal of the study is likely to be able to predict the classification for a typical user, the user name is excluded from the set of predictors in this analysis.</p>
+<p>52 potential predictor variables survive with at least 3,200 observations in each category. The number of observations per execution shows no major imbalance.</p>
 <table>
 <thead>
 <tr class="header">
@@ -221,118 +223,22 @@ To avoid confusion when cross-validating (where “training” and “testing”
 </tr>
 </tbody>
 </table>
-<table>
-<thead>
-<tr class="header">
-<th align="left">Var1</th>
-<th align="right">Freq</th>
-</tr>
-</thead>
-<tbody>
-<tr class="odd">
-<td align="left">adelmo</td>
-<td align="right">3892</td>
-</tr>
-<tr class="even">
-<td align="left">carlitos</td>
-<td align="right">3112</td>
-</tr>
-<tr class="odd">
-<td align="left">charles</td>
-<td align="right">3536</td>
-</tr>
-<tr class="even">
-<td align="left">eurico</td>
-<td align="right">3070</td>
-</tr>
-<tr class="odd">
-<td align="left">jeremy</td>
-<td align="right">3402</td>
-</tr>
-<tr class="even">
-<td align="left">pedro</td>
-<td align="right">2610</td>
-</tr>
-</tbody>
-</table>
-<table>
-<thead>
-<tr class="header">
-<th align="left"></th>
-<th align="right">A</th>
-<th align="right">B</th>
-<th align="right">C</th>
-<th align="right">D</th>
-<th align="right">E</th>
-</tr>
-</thead>
-<tbody>
-<tr class="odd">
-<td align="left">adelmo</td>
-<td align="right">1165</td>
-<td align="right">776</td>
-<td align="right">750</td>
-<td align="right">515</td>
-<td align="right">686</td>
-</tr>
-<tr class="even">
-<td align="left">carlitos</td>
-<td align="right">834</td>
-<td align="right">690</td>
-<td align="right">493</td>
-<td align="right">486</td>
-<td align="right">609</td>
-</tr>
-<tr class="odd">
-<td align="left">charles</td>
-<td align="right">899</td>
-<td align="right">745</td>
-<td align="right">539</td>
-<td align="right">642</td>
-<td align="right">711</td>
-</tr>
-<tr class="even">
-<td align="left">eurico</td>
-<td align="right">865</td>
-<td align="right">592</td>
-<td align="right">489</td>
-<td align="right">582</td>
-<td align="right">542</td>
-</tr>
-<tr class="odd">
-<td align="left">jeremy</td>
-<td align="right">1177</td>
-<td align="right">489</td>
-<td align="right">652</td>
-<td align="right">522</td>
-<td align="right">562</td>
-</tr>
-<tr class="even">
-<td align="left">pedro</td>
-<td align="right">640</td>
-<td align="right">505</td>
-<td align="right">499</td>
-<td align="right">469</td>
-<td align="right">497</td>
-</tr>
-</tbody>
-</table>
 </div>
 <div id="cross-validation" class="section level2">
 <h2>Cross validation</h2>
-<p>The initial dataset (pml_testing) is split into a training and a test set using a ratio of 3 to 1. The training set will be used to build and tuning the model. The test set then allows to assess the forecasting ability on data that has not been used to build and tune.</p>
+<p>The processed dataset (train) is split into a training and a test set using a ratio of 3 to 1. The training set will be used to build and tune the model. The test set then allows to assess the forecasting ability on data that has not been used to build and tune the predicting model.</p>
 </div>
 <div id="model-building" class="section level2">
 <h2>Model building</h2>
 <div id="define-a-recipe" class="section level3">
 <h3>Define a recipe</h3>
-<p>The tidymodels package allows to define a “recipe”. Such recipes start with basic information about the model by defining the data and the roles of variables as outcomes, predictors, or not-to-be-used descriptors. The recipe also provides preprocessing steps to transform the variables.</p>
-<p>Given that all predictors are numerical but on different scales we only normalize (center plus scale) them to bring the values to a comparable scale.</p>
-<p>The recipe will automatically be applied to the test data when validating the model.</p>
+<p>The tidymodels package allows to define a “recipe”. Such recipes start with basic information about the model by defining the data and the roles of variables as outcomes, predictors, or not-to-be-used descriptors. The recipe also contains preprocessing steps to further transform the variables.</p>
+<p>Given that all predictors are numerical but on different scales we normalize (center plus scale) them to bring the values to a comparable scale.</p>
+<p>The recipe will automatically be applied to the test data when validating the model later on.</p>
 </div>
 <div id="specify-the-model" class="section level3">
 <h3>Specify the model</h3>
-<p>Type of final model: Classification - has the weight-lifting exercise been performed as specified or what type of mistake has been made.</p>
+<p>A classification model has to be used to answer the question if the weight-lifting exercise had been performed correctly or what type of mistake has been made.</p>
 <p>The model used is of the “random forest” type. Such models tend to exhibit high accuracy, especially in situation with many more observations then predictors. Internally, random samples of the observations are taken via bootstrapping. Additionally also the variables are randomly sampled via bootstrapping. Many trees are build and a voting algorithm is applied to define the optimal decision tree.<br />
 Disadvantages of random forest models are their high requirements of computing power / slow speed, some lack of in-depth interpretability, and a tendency to overfit. A careful assessment in an out-of-sample context is recommended.</p>
 <p>There are three “hyperparameters” than can be used to tune the model.</p>
@@ -342,15 +248,15 @@ Disadvantages of random forest models are their high requirements of computing p
 <li>Minimum number of data points in a node required to split further (min_n).<br />
 This parameter is not used in tuning the model, i.e. left at the default value of 1.</li>
 </ol>
-<p>The model will be tuned by simulating in-sample performance for a range of mtry and trees parameters.</p>
+<p>The model will be tuned by simulating in-sample performance for a grid of different mtry and trees parameters.</p>
 </div>
 <div id="build-the-workflow" class="section level3">
 <h3>Build the workflow</h3>
-<p>A workflow combines a recipe with a model. Nothing is computed yet.</p>
+<p>A workflow combines recipe and model.</p>
 </div>
 <div id="parameter-tuning" class="section level3">
 <h3>Parameter tuning</h3>
-<p>As outlined above, changes to mtry and trees parameters are to be changed and the quality of the resulting predictions are evaluated in-sample on the train set.</p>
+<p>As outlined above, some values of the mtry and trees parameters are varied and the resulting predictions are evaluated in-sample on the training set.</p>
 <p>The usual recommendation for mtry is sqrt(number of predictors) which would be roughly 7 in the case of 52 predictors. The default value for trees is 500.</p>
 <p>Tuning was performed using mtry = c(2, 5, 7) and trees = c(50, 100, 500).</p>
 <p>The ad-hoc expectation was that the inclusion of more predictors and the creation of more trees increases in-sample accuracy. However, even with the smallest parameters (i.e. mtry = 2 and trees = 50) the accuracy was above 99%, equally high were sensitivity and specificity. Any increase in the parameters will, on the other hand, increase the amount of potential over-fitting.</p>
@@ -372,10 +278,12 @@ The final model will be run with mtry = 7 (as this is close to the rule of thumb
 </div>
 <div id="add-selected-parameters-to-workflow" class="section level3">
 <h3>Add selected parameters to workflow</h3>
+<p>With the selected set of model parameters the final model can be defined and combined with the recipe will form the workflow.</p>
 </div>
 <div id="apply-model-to-test" class="section level3">
 <h3>Apply model to test</h3>
-<p>In a last step the model will be applied to the test set (pml_test).</p>
+<p>In a last step the workflow will be applied to the test set from cross-validation (pml_test).<br />
+The predictions are generated and accuracy and confusion matrix are given.</p>
 <table>
 <thead>
 <tr class="header">
@@ -408,7 +316,7 @@ The final model will be run with mtry = 7 (as this is close to the rule of thumb
 ##          D    0    0    2  795    2
 ##          E    0    0    0    1  915</code></pre>
 <p>The result (99.51%) confirms the high accuracy in the training set (99.55%).</p>
-<p>Given the fact that training and testing set were generated from the same individuals, there is a fair chance for a significant drop in accuracy when other individuals are measured.</p>
+<p>Given the fact that pml-training and pml-testing set were likely generated from the same individuals, there is a fair chance for a significant drop in accuracy when other individuals are measured.</p>
 </div>
 </div>
 
