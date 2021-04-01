@@ -79,10 +79,11 @@ accuracies <- results %>%
 ggplot(data = accuracies, aes(x = mtry, y = mean, color = as_factor(trees))) +
         geom_point(position = position_jitter(width = .05, height = 0.005)) +
         labs(title = "Jittered plot of accuracies", 
-             caption = "mtry parameter") + 
+             color = "Parameter: trees") + 
         ylim(0.75, 1) + 
-        scale_x_continuous(breaks = c(2,5,7))
-
+        ylab("Mean Accuracy") +
+        scale_x_continuous(breaks = c(2,5,7)) +
+        xlab("Parameter: mtry")
  
 # set parameters in final workflow
 # choice of accuracy 

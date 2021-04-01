@@ -20,8 +20,8 @@ library(doParallel)
 
 ## Executive Summary
 
-Goal of the project was to create a model based to predict correct execution or
-common mistakes of barbell-lifting exercises based on measurements from fitness
+Goal of the project was to create a model to predict correct execution or common
+mistakes of barbell-lifting exercises based on measurements from fitness
 trackers. A random forest model was created based on the tidymodels package in
 R. The model performs well with a likelihood of correct prediction above 99%.\
 Consequently, fitness trackers or smartwatches can indeed be used to alert their
@@ -65,14 +65,14 @@ common terminology) the pml-testing data is named pml_newdata.
 
 ## Exploration
 
-The outcome variable "classe" is categorical and thus a classification should be
-predicted.
+The outcome variable "classe" is categorical and thus the classification should
+be predicted.
 
-A comparison of variable names in the two datasets shows that there is a
-difference. Training data contains the independent variable "classe" whereas
-newdata has a variable called "problem_id" which is identical to the row number.
-Consequently, pml_newdata has no outcome variable and the true out-of-sample
-predictive ability of the model remains an open question.
+A comparison of variable names in the two datasets shows is a difference.
+Training data contains the independent variable "classe" whereas newdata has a
+variable called "problem_id" which is identical to the row number. Consequently,
+pml_newdata has no outcome variable and the true out-of-sample predictive
+ability of the model remains an open question.
 
 A further analysis of pml_newdata shows that many variables consist of missing
 values only. It may not be sensible to even start constructing a prediction
@@ -204,6 +204,8 @@ pml_model <- rand_forest() %>%
   set_engine("ranger") %>%
   set_mode("classification")
 
+pml_model
+
 ```
 
 ### Build the workflow
@@ -216,6 +218,8 @@ A workflow combines recipe and model.
 pml_workflow <- workflow() %>%
   add_recipe(pml_recipe) %>%
   add_model(pml_model)
+
+pml_workflow
 
 ```
 
@@ -241,11 +245,14 @@ pml_tune_results <- pml_workflow %>%
 results <- pml_tune_results %>% 
         collect_metrics()
 
+results
+
 # next (commented) lines of code would automatically use the best parameter set, 
 # which gets the process closer to unsupervised learning
 
 # tuning_result <- pml_tune_results %>% select_best(metric = "accuracy")
 # pml_workflow <- pml_workflow %>% finalize_workflow(tuning_result)
+
 ```
 
 Tuning was performed using mtry = c(2, 5, 7) and trees = c(50, 100, 500).
@@ -263,15 +270,18 @@ accuracies <- results %>%
         filter(.metric == "accuracy") %>% 
         select(mtry, trees, mean, std_err) %>% 
         arrange(mtry, trees)
+
 accuracies
 
 # make a plot
 ggplot(data = accuracies, aes(x = mtry, y = mean, color = as_factor(trees))) +
         geom_point(position = position_jitter(width = .05, height = 0.005)) +
         labs(title = "Jittered plot of accuracies", 
-             caption = "mtry parameter") + 
+             color = "Parameter: trees") + 
         ylim(0.75, 1) + 
-        scale_x_continuous(breaks = c(2,5,7))
+        ylab("Mean Accuracy") +
+        scale_x_continuous(breaks = c(2,5,7)) +
+        xlab("Parameter: mtry")
 
 ```
 
@@ -294,10 +304,14 @@ pml_final_model <- rand_forest() %>%
   set_engine("ranger") %>%
   set_mode("classification")
 
+pml_final_model
+
 #combine recipe with final model 
 pml_workflow <- workflow() %>%
   add_recipe(pml_recipe) %>%
   add_model(pml_final_model)
+
+pml_workflow
 
 ```
 
@@ -305,7 +319,7 @@ pml_workflow <- workflow() %>%
 
 In a last step the workflow will be applied to the test set from
 cross-validation (pml_test).\
-The predictions are generated and accuracy and confusion matrix are given.
+The predictions are generated, accuracy and confusion matrix are given below.
 
 ```{r apply_to_test}
 
